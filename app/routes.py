@@ -69,7 +69,9 @@ def bought(item_id):
     if request.method == "PUT":
         item = Item.query.get(item_id)
         print(item)
-        item.status = True
+        payload = request.get_json()
+        print(payload)
+        item.status = payload.get('status')
         db.session.commit()
         return jsonify({
             'status': 'Update status to bought',
