@@ -1,79 +1,68 @@
-from flask import jsonify, request
-import uuid
-from app import app, db
+from flask import request
+import json
+from app import app, db, socketio
 from app.models import Item
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import exc, desc
-import json
 # helper class to convert query object to JSON easily
 from app.helpers import AlchemyEncoder, update_item
+from flask_socketio import send, emit
+
+@socketio.on('connect')
+def handle_message():
+    print(request.sid)
+
+@socketio.on('getList')
+def getList():
+    all_items = Item.query.all()
+    # use the AlchemyEncoder helper class to encode the query object in to JSON
+    output = json.dumps(all_items, cls=AlchemyEncoder)
+    output = json.loads(output)
+    socketio.emit('updateList', output)
 
 
-@app.route('/list', methods=['GET', 'POST', 'DELETE'])
-def shopping_list():
-
-    if request.method == "POST":
-        print("Posted Data")
-        post_data = request.get_json()
-        item = Item(
-            item=post_data.get('item'),
-            quantity=post_data.get('quantity'),
-            status=post_data.get('bought')
-        )
-        db.session.add(item)
-        db.session.commit()
-        return jsonify("Item Added")
-
-    if request.method == "GET":
-        all_items = Item.query.all()
-
-        # use the AlchemyEncoder helper class to encode the query object in to JSON
-        output = json.dumps(all_items, cls=AlchemyEncoder)
-        output = json.loads(output)
-
-        return jsonify({
-            "list": output,
-            'status': 'success'
-    })
-
-    if request.method == 'DELETE':
-        Item.query.delete()
-        db.session.commit()
-        return jsonify("All Deleted")
+@socketio.on('clearList')
+def clearList():
+    Item.query.delete()
+    db.session.commit()
+    getList()
 
 
-@app.route('/list/<item_id>', methods=['PUT', 'DELETE'])
-def single_item(item_id):
-    if request.method == "PUT":
-        post_data = request.get_json()
-
-        # update_item is a helper function in helpers.py
-        status = update_item(item_id, post_data)
-        return jsonify({
-            'status': status,
-            'Item ID': item_id
-        })
-    if request.method == "DELETE":
-        Item.query.filter_by(id=item_id).delete()
-        db.session.commit()
-        return jsonify({
-            'status': 'Item Deleted',
-            'Item ID': item_id
-        })
+@socketio.on('boughtItem')
+def boughtItem(payload):
+    print(payload)
+    item = Item.query.get(payload['id'])
+    item.status = payload['status']
+    db.session.commit()
+    getList()
 
 
+@socketio.on('deleteItem')
+def deleteItem(itemID):
+    Item.query.filter_by(id=itemID).delete()
+    db.session.commit()
+    getList()
 
 
-@app.route('/bought/<item_id>', methods=['PUT'])
-def bought(item_id):
-    if request.method == "PUT":
-        item = Item.query.get(item_id)
-        print(item)
-        payload = request.get_json()
-        print(payload)
-        item.status = payload.get('status')
-        db.session.commit()
-        return jsonify({
-            'status': 'Update status to bought',
-            'Item ID': item_id
-        })
+@socketio.on('updateItem')
+def updateItem(payload):
+    item = Item.query.get(payload['id'])
+    item.item = payload.get("item")
+    item.quantity = payload.get("quantity")
+    db.session.commit()
+    getList()
+
+
+@socketio.on('addItem')
+def addItem(payload):
+    print((payload))
+    emit('testEmit', payload, broadcast=True)
+    item = Item(
+        item=payload['item'],
+        quantity=payload['quantity'],
+        status=False
+    )
+    db.session.add(item)
+    db.session.commit()
+    print('item added')
+    getList()
