@@ -16,4 +16,5 @@ db = SQLAlchemy(app)
 ma = Marshmallow(app)
 migrate = Migrate(app, db)
 socketio = SocketIO(app)
-socketio.init_app(app, cors_allowed_origins="*",logger=True)
+socketio.init_app(
+    app, cors_allowed_origins="https://shopping.dwe.dev", logger=True)
